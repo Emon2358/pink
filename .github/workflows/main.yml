@@ -1,0 +1,43 @@
+name: Check API Key
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test_api_key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install jq
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Generate temporary UUID
+        id: genuuid
+        run: echo "::set-output name=uuid::$(uuidgen)"
+
+      - name: Check API Key validity
+        env:
+          API_KEY: "92816834ea82099597f7285db999b4b74496eaf9b7e17007ebaaa8be4eb19ad5"
+          EMAIL: "test@example.com"
+          PASSWORD: "invalid"
+          UUID: ${{ steps.genuuid.outputs.uuid }}
+        run: |
+          response=$(curl -s -X POST "https://api.yay.space/v3/users/login_with_email" \
+            -d "password=$PASSWORD" \
+            -d "uuid=$UUID" \
+            -d "email=$EMAIL" \
+            -d "api_key=$API_KEY")
+          echo "Response: $response"
+          # Check if "error_code" exists in response.
+          error=$(echo "$response" | jq -r '.error_code // empty')
+          if [ -z "$error" ]; then
+            echo "API key appears to be valid, but no error_code was returned. It might be a successful response or an unexpected format. Please verify manually."
+          elif [ "$error" = "INVALID_API_KEY" ]; then
+            echo "Error: The API key is invalid ($error)."
+            exit 1
+          else
+            echo "API key is accepted based on response error_code: $error (likely due to invalid credentials rather than an invalid API key)."
+          fi
